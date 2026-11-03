@@ -1,0 +1,40 @@
+server:
+  port: 8090
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: service-dossier-medical
+  jackson:
+    default-property-inclusion: non_null
+
+sunu:
+  quorum:
+    noeud-id: ${NOEUD_ID:dossier-local}
+    # Adresses des autres répliques (le nœud courant est ajouté automatiquement : N = pairs + 1)
+    pairs: ${NOEUD_PAIRS:}
+    w: 2
+    r: 2
+    delai-replique: 2s
+  stockage:
+    repertoire: ${STOCKAGE_REPERTOIRE:./donnees-${sunu.quorum.noeud-id}}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      noeud: ${sunu.quorum.noeud-id}
+
+logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [${NOEUD_ID:dossier-local}] %logger{0} : %msg%n"

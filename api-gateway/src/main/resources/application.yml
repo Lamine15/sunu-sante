@@ -1,0 +1,60 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      # Annonce explicitement l'UTF-8 dans les réponses (sinon certains clients, comme PowerShell 5.1, lisent de l'ISO-8859-1).
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: api-gateway
+  jackson:
+    default-property-inclusion: non_null
+
+sunu:
+  patient:
+    url: ${PATIENT_URL:http://localhost:8081}
+  dossier:
+    noeuds: ${DOSSIER_NOEUDS:http://localhost:8091,http://localhost:8092,http://localhost:8093}
+
+# Disjoncteur protégeant le service-dossier-medical :
+# - fenêtre des 10 derniers appels, évaluée à partir de 5 appels ;
+# - s'ouvre si 50 % des appels échouent ou dépassent 2 s ;
+# - reste ouvert 15 s, puis laisse passer 3 appels de test (demi-ouvert).
+# Les erreurs 4xx (dossier introuvable, requête invalide) ne sont pas des pannes : elles sont ignorées.
+resilience4j:
+  circuitbreaker:
+    instances:
+      dossierMedical:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        slow-call-duration-threshold: 2s
+        slow-call-rate-threshold: 50
+        wait-duration-in-open-state: 15s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,circuitbreakers,circuitbreakerevents
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [gateway] %logger{0} : %msg%n"

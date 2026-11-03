@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: sunu-sante
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - service-patient:8081
+          - service-analyse-temps-reel:8083
+          - service-notification:8084
+          - api-gateway:8080
+          - dossier-medical-1:8090
+          - dossier-medical-2:8090
+          - dossier-medical-3:8090

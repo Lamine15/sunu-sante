@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sunu Santé, console médecin</title>
+<style>
+  :root { --fond:#f4f6f8; --carte:#fff; --texte:#1d2733; --doux:#5b6b7c; --accent:#0b7a62; --alerte:#c0392b; --bord:#d9e0e6; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--fond); color:var(--texte); }
+  header { background:var(--accent); color:#fff; padding:14px 24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  header h1 { margin:0; font-size:20px; }
+  .pastille { padding:4px 10px; border-radius:12px; font-size:13px; font-weight:600; background:#fff; color:var(--texte); }
+  .pastille.OPEN { background:var(--alerte); color:#fff; } .pastille.HALF_OPEN { background:#e67e22; color:#fff; }
+  main { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; padding:16px; max-width:1300px; margin:auto; }
+  section { background:var(--carte); border:1px solid var(--bord); border-radius:8px; padding:16px; }
+  h2 { font-size:16px; margin:0 0 12px; }
+  label { display:block; font-size:13px; color:var(--doux); margin-top:8px; }
+  input, select, textarea { width:100%; padding:7px 8px; border:1px solid var(--bord); border-radius:5px; font:inherit; }
+  button { margin-top:10px; padding:8px 14px; border:0; border-radius:5px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
+  button.secondaire { background:#e8eef2; color:var(--texte); }
+  ul { list-style:none; padding:0; margin:0; } li { padding:6px 0; border-bottom:1px solid var(--bord); cursor:pointer; }
+  li:hover { color:var(--accent); }
+  pre { background:#0f1720; color:#d6e2ee; padding:10px; border-radius:6px; font-size:12px; overflow:auto; max-height:380px; white-space:pre-wrap; }
+  .anomalie { color:var(--alerte); font-weight:600; }
+  .large { grid-column:1/-1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Sunu Santé, console médecin</h1>
+  <span>Disjoncteur dossier médical : <span id="disjoncteur" class="pastille">?</span>
+        &nbsp; Tampon capteurs : <span id="tampon" class="pastille">?</span></span>
+</header>
+<main>
+  <section>
+    <h2>Inscrire un patient</h2>
+    <form id="formPatient">
+      <label>Prénom<input name="prenom" required value="Awa"></label>
+      <label>Nom<input name="nom" required value="Ndiaye"></label>
+      <label>Date de naissance<input name="dateNaissance" type="date" value="1968-04-12"></label>
+      <label>Pathologie<input name="pathologie" value="Diabète de type 2"></label>
+      <label>Médecin traitant<input name="medecinTraitant" value="Dr Fall"></label>
+      <button>Inscrire</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Patients</h2>
+    <ul id="patients"></ul>
+    <button class="secondaire" onclick="chargerPatients()">Actualiser</button>
+  </section>
+
+  <section>
+    <h2>Simuler un capteur</h2>
+    <form id="formMesure">
+      <label>Patient<select name="patientId" id="selectPatient"></select></label>
+      <label>Type<select name="type">
+        <option>RYTHME_CARDIAQUE</option><option>GLUCOSE</option><option>TEMPERATURE</option>
+        <option>TENSION_SYSTOLIQUE</option><option>SATURATION_OXYGENE</option></select></label>
+      <label>Valeur<input name="valeur" type="number" step="0.1" value="135"></label>
+      <button>Envoyer la mesure</button>
+    </form>
+  </section>
+
+  <section class="large">
+    <h2>Dossier médical <span id="titreDossier"></span></h2>
+    <div id="actionsDossier" hidden>
+      <form id="formPrescription" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+        <label style="flex:1">Médicament<input name="medicament" required></label>
+        <label style="flex:1">Posologie<input name="posologie" required></label>
+        <button>Prescrire</button>
+      </form>
+      <form id="formNote" style="display:flex;gap:8px;align-items:end">
+        <label style="flex:3">Note<input name="contenu" required></label>
+        <button>Ajouter la note</button>
+      </form>
+    </div>
+    <pre id="dossier">Sélectionnez un patient.</pre>
+  </section>
+</main>
+<script>
+let patientCourant = null;
+const $ = id => document.getElementById(id);
+
+async function api(chemin, options = {}) {
+  const r = await fetch('/api' + chemin, { headers: { 'Content-Type': 'application/json' }, ...options });
+  const texte = await r.text();
+  let corps; try { corps = JSON.parse(texte); } catch { corps = texte; }
+  if (!r.ok) throw { statut: r.status, corps };
+  return corps;
+}
+const formulaire = f => Object.fromEntries(new FormData(f).entries());
+
+async function chargerPatients() {
+  const liste = await api('/patients');
+  liste.sort((a, b) => a.inscritLe.localeCompare(b.inscritLe));
+  $('patients').innerHTML = ''; $('selectPatient').innerHTML = '';
+  liste.forEach(p => {
+    const li = document.createElement('li');
+    li.textContent = `${p.prenom} ${p.nom} (${p.id}), ${p.pathologie || ''}`;
+    li.onclick = () => ouvrirDossier(p.id, `${p.prenom} ${p.nom}`);
+    $('patients').appendChild(li);
+    $('selectPatient').add(new Option(`${p.prenom} ${p.nom}`, p.id));
+  });
+  return liste;
+}
+
+async function ouvrirDossier(id, nom) {
+  patientCourant = id;
+  if (nom) $('titreDossier').textContent = `: ${nom}`;
+  $('actionsDossier').hidden = false;
+  try {
+    const d = await api(`/patients/${id}/dossier`);
+    const anomalies = d.dossier.mesures.filter(m => m.anomalie).length;
+    $('dossier').innerHTML = `<span>Version ${d.version}, coordonnée par ${d.coordinateur} (${d.quorum}), ` +
+      `répliques lues : ${d.repliquesConsultees.join(', ')}</span>\n` +
+      (anomalies ? `<span class="anomalie">${anomalies} mesure(s) anormale(s) consignée(s)</span>\n` : '') +
+      '\n' + JSON.stringify(d.dossier, null, 2);
+  } catch (e) {
+    $('dossier').textContent = `Erreur ${e.statut} :\n` + JSON.stringify(e.corps, null, 2);
+  }
+}
+
+$('formPatient').onsubmit = async ev => {
+  ev.preventDefault();
+  try { const r = await api('/patients', { method: 'POST', body: JSON.stringify(formulaire(ev.target)) });
+        await chargerPatients(); ouvrirDossier(r.patient.id, `${r.patient.prenom} ${r.patient.nom}`); }
+  catch (e) { alert(`Inscription refusée (${e.statut}) : ${JSON.stringify(e.corps)}`); }
+};
+$('formMesure').onsubmit = async ev => {
+  ev.preventDefault();
+  const m = formulaire(ev.target); m.valeur = parseFloat(m.valeur);
+  try { const r = await api('/mesures', { method: 'POST', body: JSON.stringify(m) });
+        $('dossier').textContent = 'Mesure envoyée : ' + JSON.stringify(r, null, 2); }
+  catch (e) { alert(`Mesure refusée (${e.statut}) : ${JSON.stringify(e.corps)}`); }
+};
+$('formPrescription').onsubmit = async ev => {
+  ev.preventDefault();
+  const p = { ...formulaire(ev.target), prescripteur: 'Dr Fall' };
+  try { await api(`/patients/${patientCourant}/prescriptions`, { method: 'POST', body: JSON.stringify(p) }); ev.target.reset(); }
+  catch (e) { alert(`Erreur ${e.statut} : ${JSON.stringify(e.corps)}`); }
+  ouvrirDossier(patientCourant);
+};
+$('formNote').onsubmit = async ev => {
+  ev.preventDefault();
+  const n = { ...formulaire(ev.target), auteur: 'Dr Fall' };
+  try { await api(`/patients/${patientCourant}/notes`, { method: 'POST', body: JSON.stringify(n) }); ev.target.reset(); }
+  catch (e) { alert(`Erreur ${e.statut} : ${JSON.stringify(e.corps)}`); }
+  ouvrirDossier(patientCourant);
+};
+
+async function rafraichirEtat() {
+  try {
+    const e = await api('/systeme/etat');
+    const d = e.disjoncteurDossierMedical;
+    $('disjoncteur').textContent = `${d.etat} (échecs ${d.tauxEchecPourcent < 0 ? 0 : d.tauxEchecPourcent} %)`;
+    $('disjoncteur').className = 'pastille ' + d.etat;
+    const t = e.tamponServicePatient;
+    $('tampon').textContent = typeof t === 'object' ? `${t.mesuresEnTampon} en attente` : 'injoignable';
+  } catch { $('disjoncteur').textContent = 'gateway injoignable'; }
+}
+// Une adresse de la forme /#PAT-XXXXXXXX ouvre directement le dossier de ce patient.
+chargerPatients().then(liste => {
+  const id = decodeURIComponent(location.hash.slice(1));
+  const p = liste.find(x => x.id === id);
+  if (p) ouvrirDossier(p.id, `${p.prenom} ${p.nom}`);
+});
+rafraichirEtat(); setInterval(rafraichirEtat, 2000);
+</script>
+</body>
+</html>

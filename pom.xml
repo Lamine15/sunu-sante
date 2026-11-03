@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- POM agrégateur : permet de compiler les 5 services d'un coup (mvn clean package).
+     Chaque service reste une application Spring Boot autonome avec son propre parent. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>sn.ugb.sunusante</groupId>
+    <artifactId>sunu-sante</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+    <name>Sunu Santé</name>
+
+    <modules>
+        <module>service-patient</module>
+        <module>service-dossier-medical</module>
+        <module>service-analyse-temps-reel</module>
+        <module>service-notification</module>
+        <module>api-gateway</module>
+    </modules>
+</project>

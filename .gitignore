@@ -1,0 +1,15 @@
+target/
+*.class
+*.log
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+.env
+# Rapport rédigé en équipe : conservé en local, hors du dépôt public
+rapport/
+scripts/.patient-demo
+donnees-*/
+*.zip

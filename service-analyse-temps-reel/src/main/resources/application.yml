@@ -1,0 +1,76 @@
+server:
+  port: 8083
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: service-analyse-temps-reel
+  jackson:
+    default-property-inclusion: non_null
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: 5672
+    username: ${RABBITMQ_USER:sunu}
+    password: ${RABBITMQ_PASSWORD:sunu-demo}
+    connection-timeout: 2s
+    listener:
+      simple:
+        prefetch: 20
+        # Un message qui échoue 3 fois part dans la file des rejets au lieu de boucler indéfiniment.
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+
+sunu:
+  dossier:
+    noeuds: ${DOSSIER_NOEUDS:http://localhost:8091,http://localhost:8092,http://localhost:8093}
+  # Seuils de normalité ; toute mesure hors de [min, max] est une anomalie.
+  # Les crochets préservent les clés telles quelles (sinon Spring retire les « _ »).
+  regles:
+    "[RYTHME_CARDIAQUE]": { min: 50, max: 100 }
+    "[GLUCOSE]": { min: 0.7, max: 1.8 }
+    "[TEMPERATURE]": { min: 35.5, max: 38.5 }
+    "[TENSION_SYSTOLIQUE]": { min: 90, max: 140 }
+    "[SATURATION_OXYGENE]": { min: 92, max: 100 }
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      dossierMedical:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        slow-call-duration-threshold: 2s
+        slow-call-rate-threshold: 50
+        wait-duration-in-open-state: 15s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,circuitbreakers
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [analyse] %logger{0} : %msg%n"

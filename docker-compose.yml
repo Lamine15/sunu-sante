@@ -1,0 +1,120 @@
+# Sunu Santé : plateforme de télémédecine résiliente
+# Lancement : docker compose up --build
+name: sunu-sante-v2
+
+x-service-java: &service-java
+  restart: unless-stopped
+  mem_limit: 512m
+  environment: &env-commun
+    JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70 -XX:+UseSerialGC"
+    RABBITMQ_HOST: rabbitmq
+    RABBITMQ_USER: ${RABBITMQ_USER:-sunu}
+    RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-sunu-demo}
+    DOSSIER_NOEUDS: http://dossier-medical-1:8090,http://dossier-medical-2:8090,http://dossier-medical-3:8090
+
+x-dossier-medical: &dossier-medical
+  <<: *service-java
+  build: ./service-dossier-medical
+
+services:
+
+  # ---------- Infrastructure ----------
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    hostname: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-sunu}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-sunu-demo}
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # console d'administration
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  # ---------- Service dossier médical : 3 répliques sans leader (N=3, W=2, R=2) ----------
+  dossier-medical-1:
+    <<: *dossier-medical
+    environment:
+      <<: *env-commun
+      NOEUD_ID: dossier-1
+      NOEUD_PAIRS: http://dossier-medical-2:8090,http://dossier-medical-3:8090
+    ports: ["8091:8090"]
+    volumes: ["dossier-1-data:/data"]
+
+  dossier-medical-2:
+    <<: *dossier-medical
+    environment:
+      <<: *env-commun
+      NOEUD_ID: dossier-2
+      NOEUD_PAIRS: http://dossier-medical-1:8090,http://dossier-medical-3:8090
+    ports: ["8092:8090"]
+    volumes: ["dossier-2-data:/data"]
+
+  dossier-medical-3:
+    <<: *dossier-medical
+    environment:
+      <<: *env-commun
+      NOEUD_ID: dossier-3
+      NOEUD_PAIRS: http://dossier-medical-1:8090,http://dossier-medical-2:8090
+    ports: ["8093:8090"]
+    volumes: ["dossier-3-data:/data"]
+
+  # ---------- Services métier ----------
+  service-patient:
+    <<: *service-java
+    build: ./service-patient
+    ports: ["8081:8081"]
+    volumes: ["patient-data:/data"]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  service-analyse-temps-reel:
+    <<: *service-java
+    build: ./service-analyse-temps-reel
+    ports: ["8083:8083"]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  service-notification:
+    <<: *service-java
+    build: ./service-notification
+    ports: ["8084:8084"]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  api-gateway:
+    <<: *service-java
+    build: ./api-gateway
+    environment:
+      <<: *env-commun
+      PATIENT_URL: http://service-patient:8081
+    ports: ["8080:8080"]
+    depends_on:
+      - service-patient
+      - dossier-medical-1
+      - dossier-medical-2
+      - dossier-medical-3
+
+volumes:
+  rabbitmq-data:
+  patient-data:
+  dossier-1-data:
+  dossier-2-data:
+  dossier-3-data:

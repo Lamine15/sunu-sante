@@ -1,0 +1,45 @@
+server:
+  port: 8081
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: service-patient
+  jackson:
+    default-property-inclusion: non_null
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: 5672
+    username: ${RABBITMQ_USER:sunu}
+    password: ${RABBITMQ_PASSWORD:sunu-demo}
+    connection-timeout: 2s
+    # Confirmations de publication : une mesure n'est considérée publiée qu'après l'accusé du broker.
+    publisher-confirm-type: simple
+
+sunu:
+  tampon:
+    capacite: 10000
+    delai-initial: 1s
+    delai-max: 60s
+    delai-confirmation: 3s
+  stockage:
+    repertoire: ${STOCKAGE_REPERTOIRE:./donnees-patient}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [patient] %logger{0} : %msg%n"
